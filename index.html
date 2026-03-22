@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contour Designer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#09090B;--panel:#0F0F12;--panel-border:#1A1A1F;--surface:#141418;
+    --surface-hover:#1A1A20;--text-primary:#E4E4E7;--text-secondary:#71717A;
+    --text-tertiary:#52525B;--accent:#A1A1AA;--border:#27272A;--border-subtle:#1E1E22;
+    --input-bg:#18181B;--input-border:#27272A;--focus:#3F3F46;
+    --scrollbar:#27272A;--scrollbar-hover:#3F3F46;
+  }
+  body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var(--text-primary);overflow:hidden;height:100vh;display:flex;-webkit-font-smoothing:antialiased}
+  #viewport{flex:1;position:relative;cursor:grab;touch-action:none}
+  #viewport:active{cursor:grabbing}
+  #viewport canvas{display:block}
+
+  #panelToggle{
+    position:absolute;top:16px;right:16px;z-index:20;
+    background:var(--surface);border:1px solid var(--border);color:var(--text-secondary);
+    width:32px;height:32px;border-radius:6px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    font-size:14px;font-family:inherit;transition:all .15s;
+  }
+  #panelToggle:hover{background:var(--surface-hover);color:var(--text-primary);border-color:var(--focus)}
+
+  #resetCam{
+    position:absolute;top:56px;right:16px;z-index:20;
+    background:var(--surface);border:1px solid var(--border);color:var(--text-secondary);
+    width:32px;height:32px;border-radius:6px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    font-size:11px;font-family:inherit;transition:all .15s;
+  }
+  #resetCam:hover{background:var(--surface-hover);color:var(--text-primary);border-color:var(--focus)}
+
+  #panel{
+    width:320px;min-width:320px;height:100vh;background:var(--panel);
+    border-left:1px solid var(--panel-border);overflow-y:auto;overflow-x:hidden;
+    transition:margin-right .25s ease;
+  }
+  #panel.hidden{margin-right:-320px;min-width:0;width:0;overflow:hidden}
+  #panel::-webkit-scrollbar{width:4px}
+  #panel::-webkit-scrollbar-track{background:transparent}
+  #panel::-webkit-scrollbar-thumb{background:var(--scrollbar);border-radius:2px}
+  #panel::-webkit-scrollbar-thumb:hover{background:var(--scrollbar-hover)}
+
+  .panel-header{padding:20px 20px 8px;position:sticky;top:0;background:var(--panel);z-index:10;border-bottom:1px solid var(--panel-border);padding-bottom:16px;margin-bottom:4px}
+  .panel-header h1{font-size:13px;font-weight:500;letter-spacing:-0.01em;color:var(--text-primary)}
+  .panel-header p{font-size:11px;color:var(--text-tertiary);margin-top:2px;font-weight:400}
+
+  .section{border-bottom:1px solid var(--border-subtle)}
+  .section-header{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;cursor:pointer;user-select:none;transition:background .15s}
+  .section-header:hover{background:var(--surface)}
+  .section-header h2{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-secondary)}
+  .section-chevron{width:12px;height:12px;color:var(--text-tertiary);transition:transform .2s}
+  .section.collapsed .section-chevron{transform:rotate(-90deg)}
+  .section.collapsed .section-body{display:none}
+  .section-body{padding:4px 20px 16px}
+
+  .control-row{display:flex;align-items:center;justify-content:space-between;min-height:32px;margin-bottom:2px}
+  .control-row label{font-size:12px;font-weight:400;color:var(--text-secondary);white-space:nowrap;flex-shrink:0}
+  .control-row .control-input{display:flex;align-items:center;gap:8px;flex-shrink:0}
+
+  input[type="range"]{-webkit-appearance:none;appearance:none;width:120px;height:2px;background:var(--border);border-radius:1px;outline:none;cursor:pointer}
+  input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;background:var(--text-primary);border-radius:50%;cursor:pointer;transition:transform .1s}
+  input[type="range"]::-webkit-slider-thumb:hover{transform:scale(1.2)}
+  input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.3)}
+  input[type="range"]::-moz-range-thumb{width:10px;height:10px;background:var(--text-primary);border-radius:50%;border:none;cursor:pointer}
+
+  .range-value{font-size:11px;font-weight:400;color:var(--text-tertiary);min-width:32px;text-align:right;font-variant-numeric:tabular-nums}
+
+  select{background:var(--input-bg);border:1px solid var(--input-border);color:var(--text-primary);padding:4px 8px;border-radius:4px;font-size:11px;font-family:inherit;outline:none;cursor:pointer;transition:border-color .15s}
+  select:hover{border-color:var(--focus)}
+  select:focus{border-color:var(--accent)}
+
+  .color-input-wrap{display:flex;align-items:center;gap:6px;background:var(--input-bg);border:1px solid var(--input-border);border-radius:4px;padding:2px 6px 2px 2px;transition:border-color .15s}
+  .color-input-wrap:hover{border-color:var(--focus)}
+  .color-input-wrap input[type="color"]{-webkit-appearance:none;appearance:none;width:18px;height:18px;border:none;border-radius:3px;cursor:pointer;padding:0;background:none}
+  .color-input-wrap input[type="color"]::-webkit-color-swatch-wrapper{padding:0}
+  .color-input-wrap input[type="color"]::-webkit-color-swatch{border:none;border-radius:3px}
+  .color-input-wrap input[type="text"]{background:none;border:none;color:var(--text-tertiary);font-size:11px;font-family:'SF Mono','Fira Code',monospace;width:58px;outline:none}
+
+  .toggle-group{display:flex;background:var(--input-bg);border:1px solid var(--input-border);border-radius:4px;overflow:hidden}
+  .toggle-group button{background:none;border:none;color:var(--text-tertiary);font-family:inherit;font-size:11px;padding:4px 10px;cursor:pointer;transition:all .15s;border-right:1px solid var(--input-border)}
+  .toggle-group button:last-child{border-right:none}
+  .toggle-group button:hover{color:var(--text-secondary)}
+  .toggle-group button.active{background:var(--surface-hover);color:var(--text-primary)}
+
+  .btn{background:var(--surface);border:1px solid var(--border);color:var(--text-secondary);font-family:inherit;font-size:11px;font-weight:500;padding:6px 12px;border-radius:4px;cursor:pointer;transition:all .15s;width:100%;margin-top:4px}
+  .btn:hover{background:var(--surface-hover);color:var(--text-primary);border-color:var(--focus)}
+  .btn+.btn{margin-top:6px}
+
+  .checkbox-row{display:flex;align-items:center;gap:8px;min-height:32px;margin-bottom:2px}
+  .checkbox-row input[type="checkbox"]{-webkit-appearance:none;appearance:none;width:14px;height:14px;border:1px solid var(--input-border);border-radius:3px;background:var(--input-bg);cursor:pointer;position:relative;flex-shrink:0;transition:all .15s}
+  .checkbox-row input[type="checkbox"]:checked{background:var(--text-primary);border-color:var(--text-primary)}
+  .checkbox-row input[type="checkbox"]:checked::after{content:'';position:absolute;top:1px;left:4px;width:4px;height:7px;border:solid var(--bg);border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}
+  .checkbox-row label{font-size:12px;color:var(--text-secondary);cursor:pointer}
+
+  .info-bar{position:absolute;bottom:16px;left:16px;font-size:10px;color:var(--text-tertiary);letter-spacing:0.02em;pointer-events:none;transition:opacity .3s}
+
+  .preset-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:4px}
+  .preset-grid .btn{margin-top:0;text-align:center;font-size:10px;padding:5px 6px}
+
+  .section-note{font-size:10px;color:var(--text-tertiary);margin-bottom:6px;line-height:1.5}
+</style>
+</head>
+<body>
+
+<div id="viewport">
+  <button id="panelToggle" onclick="togglePanel()" title="Toggle panel">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h10M2 7h10M2 10h10"/></svg>
+  </button>
+  <button id="resetCam" onclick="resetCamera()" title="Reset camera">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 7a5 5 0 0 1 9-3M12 7a5 5 0 0 1-9 3"/><path d="M11 1v3h-3M3 13v-3h3"/></svg>
+  </button>
+  <div class="info-bar" id="infoBar">Drag to rotate / Scroll to zoom / Right-drag to pan</div>
+</div>
+
+<div id="panel">
+  <div class="panel-header">
+    <h1>Contour Designer</h1>
+    <p>3D terrain and shape tool</p>
+  </div>
+
+  <!-- PRESETS -->
+  <div class="section" id="sec-presets">
+    <div class="section-header" onclick="toggleSection('sec-presets')"><h2>Presets</h2><svg class="section-chevron" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="4,2 8,6 4,10"/></svg></div>
+    <div class="section-body">
+      <p class="section-note">Starting points. All values can be adjusted after applying.</p>
+      <div class="preset-grid">
+        <button class="btn" onclick="applyPreset('flat')">Flat</button>
+        <button class="btn" onclick="applyPreset('gentle')">Gentle Hills</button>
+        <button class="btn" onclick="applyPreset('alpine')">Alpine</button>
+        <button class="btn" onclick="applyPreset('dunes')">Dunes</button>
+        <button class="btn" onclick="applyPreset('mesa')">Mesa</button>
+        <button class="btn" onclick="applyPreset('ocean')">Ocean Floor</button>
+        <button class="btn" onclick="applyPreset('lava')">Lava</button>
+        <button class="btn" onclick="applyPreset('ice')">Ice</button>
+        <button class="btn" onclick="applyPreset('alien')">Alien Blob</button>
+        <button class="btn" onclick="applyPreset('topo')">Topo Map</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SHAPE -->
+  <div class="section" id="sec-shape">
+    <div class="section-header" onclick="toggleSection('sec-shape')"><h2>Shape</h2><svg class="section-chevron" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="4,2 8,6 4,10"/></svg></div>
+    <div class="section-body">
+      <div class="control-row"><label>Mode</label>
+        <div class="toggle-group" id="shapeModeGroup">
+          <button class="active" data-val="terrain" onclick="setToggle('shapeModeGroup',this);rebuildMesh()">Terrain</button>
+          <button data-val="blob" onclick="setToggle('shapeModeGroup',this);rebuildMesh()">Blob</button>
+        </div>
+      </div>
+      <div id="terrainShapeControls">
+        <div class="control-row"><label>Footprint</label>
+          <div class="toggle-group" id="footprintGroup">
+            <button class="active" data-val="square" onclick="setToggle('footprintGroup',this);document.getElementById('cornerRadiusRow').style.display=this.dataset.val==='square'?'flex':'none';rebuildMesh()">Square</button>
+            <button data-val="circle" onclick="setToggle('footprintGroup',this);document.getElementById('cornerRadiusRow').style.display=this.dataset.val==='square'?'flex':'none';rebuildMesh()">Circle</button>
+          </div>
+        </div>
+        <div class="control-row" id="cornerRadiusRow"><label>Corner radius</label><div class="control-input"><input type="range" id="cornerRadius" min="0" max="1" step="0.01" value="0"><span class="range-value" id="cornerRadiusVal">0.00</span></div></div>
+      </div>
+      <div class="control-row"><label>Resolution</label><div class="control-input"><input type="range" id="resolution" min="32" max="256" step="8" value="128"><span class="range-value" id="resolutionVal">128</span></div></div>
+      <div class="control-row"><label>Scale</label><div class="control-input"><input type="range" id="meshScale" min="0.5" max="3" step="0.05" value="1.50"><span class="range-value" id="meshScaleVal">1.50</span></div></div>
+    </div>
+  </div>
+
+  <!-- TERRAIN -->
+  <div class="section" id="sec-terrain">
+    <div class="section-header" onclick="toggleSection('sec-terrain')"><h2>Terrain</h2><svg class="section-chevron" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="4,2 8,6 4,10"/></svg></div>
+    <div class="section-body">
+      <p class="section-note">Start with Height at 0 for a flat surface, then increase to add topography.</p>
+      <div class="control-row"><label>Height</label><div class="control-input"><input type="range" id="terrainHeight" min="0" max="1" step="0.005" value="1.0"><span class="range-value" id="terrainHeightVal">1.000</span></div></div>
+      <div class="control-row"><label>Noise type</label>
+        <select id="noiseType" onchange="rebuildMesh()">
+          <option value="simplex">Simplex</option>
+          <option value="ridged">Ridged</option>
+          <option value="terraced">Terraced</option>
+          <option value="billow">Billow</option>
+        </select>
+      </div>
+      <div class="control-row"><label>Frequency</label><div class="control-input"><input type="range" id="noiseFreq" min="0.3" max="5" step="0.05" value="1.50"><span class="range-value" id="noiseFreqVal">1.50</span></div></div>
+      <div class="control-row"><label>Octaves</label><div class="control-input"><input type="range" id="noiseOctaves" min="1" max="8" step="1" value="4"><span class="range-value" id="noiseOctavesVal">4</span></div></div>
+      <div class="control-row"><label>Amplitude</label><div class="control-input"><input type="range" id="noiseAmp" min="0.05" max="1.5" step="0.01" value="0.50"><span class="range-value" id="noiseAmpVal">0.50</span></div></div>
+      <div class="control-row"><label>Lacunarity</label><div class="control-input"><input type="range" id="lacunarity" min="1" max="4" step="0.05" value="2.00"><span class="range-value" id="lacunarityVal">2.00</span></div></div>
+      <div class="control-row"><label>Seed</label><div class="control-input"><input type="range" id="seed" min="0" max="1000" step="1" value="42"><span class="range-value" id="seedVal">42</span></div></div>
+      <button class="btn" onclick="document.getElementById('seed').value=Math.floor(Math.random()*1000);updateVal('seed');rebuildMesh();">Randomise seed</button>
+    </div>
+  </div>
+
+  <!-- CONTOUR LINES -->
+  <div class="section" id="sec-contour">
+    <div class="section-header" onclick="toggleSection('sec-contour')"><h2>Contour Lines</h2><svg class="section-chevron" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="4,2 8,6 4,10"/></svg></div>
+    <div class="section-body">
+      <div class="checkbox-row"><input type="checkbox" id="contoursOn" checked onchange="updateUniforms()"><label for="contoursOn">Enable contour lines</label></div>
+      <div class="control-row"><label>Spacing</label><div class="control-input"><input type="range" id="contourSpacing" min="0.005" max="0.3" step="0.005" value="0.060"><span class="range-value" id="contourSpacingVal">0.060</span></div></div>
+      <div class="control-row"><label>Thickness</label><div class="control-input"><input type="range" id="contourThick" min="0.05" max="1.0" step="0.01" value="0.40"><span class="range-value" id="contourThickVal">0.40</span></div></div>
+      <div class="control-row"><label>Opacity</label><div class="control-input"><input type="range" id="contourOpacity" min="0" max="1" step="0.01" value="1.00"><span class="range-value" id="contourOpacityVal">1.00</span></div></div>
+      <div class="control-row"><label>Colour</label><div class="color-input-wrap"><input type="color" id="contourColor" value="#ffffff" oninput="syncColorText(this,'contourColorHex');updateUniforms()"><input type="text" id="contourColorHex" value="#ffffff" onchange="syncColorPicker(this,'contourColor');updateUniforms()"></div></div>
+      <div class="control-row"><label>Colour mode</label><select id="contourColorMode" onchange="updateUniforms()"><option value="solid">Solid</option><option value="altitude">Altitude gradient</option><option value="slope">Slope gradient</option></select></div>
+      <div class="control-row"><label>Gradient end</label><div class="color-input-wrap"><input type="color" id="contourGradEnd" value="#ff6b6b" oninput="syncColorText(this,'contourGradEndHex');updateUniforms()"><input type="text" id="contourGradEndHex" value="#ff6b6b" onchange="syncColorPicker(this,'contourGradEnd');updateUniforms()"></div></div>
+      <div class="control-row"><label>Style</label><select id="contourStyle" onchange="updateUniforms()"><option value="solid">Solid</option><option value="dashed">Dashed</option><option value="dotted">Dotted</option></select></div>
+    </div>
+  </div>
+
+  <!-- ANIMATION -->
+  <div class="section" id="sec-anim">
+    <div class="section-header" onclick="toggleSection('sec-anim')"><h2>Animation</h2><svg class="section-chevron" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="4,2 8,6 4,10"/></svg></div>
+    <div class="section-body">
+      <div class="control-row"><label>Contour flow</label><select id="animMode" onchange="updateUniforms()"><option value="none">None</option><option value="rise" selected>Rising water</option><option value="fall">Falling water</option><option value="pulse">Pulse</option><option value="ripple">Ripple</option></select></div>
+      <div class="control-row"><label>Speed</label><div class="control-input"><input type="range" id="animSpeed" min="0" max="2" step="0.01" value="0.30"><span class="range-value" id="animSpeedVal">0.30</span></div></div>
+      <div class="checkbox-row"><input type="checkbox" id="autoRotate" onchange=""><label for="autoRotate">Auto-rotate model</label></div>
+      <div class="control-row"><label>Rotate speed</label><div class="control-input"><input type="range" id="autoRotateSpeed" min="0.05" max="1.5" step="0.01" value="0.20"><span class="range-value" id="autoRotateSpeedVal">0.20</span></div></div>
+      <div class="checkbox-row"><input type="checkbox" id="animPause"><label for="animPause">Pause all animation</label></div>
+    </div>
+  </div>
+
+  <!-- SURFACE -->
+  <div class="section" id="sec-surface">
+    <div class="section-header" onclick="toggleSection('sec-surface')"><h2>Surface</h2><svg class="section-chevron" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="4,2 8,6 4,10"/></svg></div>
+    <div class="section-body">
+      <div class="control-row"><label>Colour mode</label><select id="surfaceColorMode" onchange="updateUniforms()"><option value="solid">Solid</option><option value="altitude" selected>Altitude</option><option value="slope">Slope</option><option value="heatmap">Heatmap</option></select></div>
+      <div class="control-row"><label>Base colour</label><div class="color-input-wrap"><input type="color" id="surfaceColor1" value="#1a1a2e" oninput="syncColorText(this,'surfaceColor1Hex');updateUniforms()"><input type="text" id="surfaceColor1Hex" value="#1a1a2e" onchange="syncColorPicker(this,'surfaceColor1');updateUniforms()"></div></div>
+      <div class="control-row"><label>Peak colour</label><div class="color-input-wrap"><input type="color" id="surfaceColor2" value="#4a6670" oninput="syncColorText(this,'surfaceColor2Hex');updateUniforms()"><input type="text" id="surfaceColor2Hex" value="#4a6670" onchange="syncColorPicker(this,'surfaceColor2');updateUniforms()"></div></div>
+      <div class="control-row"><label>Metalness</label><div class="control-input"><input type="range" id="metalness" min="0" max="1" step="0.01" value="0.10"><span class="range-value" id="metalnessVal">0.10</span></div></div>
+      <div class="control-row"><label>Roughness</label><div class="control-input"><input type="range" id="roughness" min="0" max="1" step="0.01" value="0.70"><span class="range-value" id="roughnessVal">0.70</span></div></div>
+      <div class="checkbox-row"><input type="checkbox" id="wireframe" onchange="updateWireframe()"><label for="wireframe">Wireframe overlay</label></div>
+      <div class="control-row"><label>Wire opacity</label><div class="control-input"><input type="range" id="wireOpacity" min="0.02" max="0.5" step="0.01" value="0.12"><span class="range-value" id="wireOpacityVal">0.12</span></div></div>
+    </div>
+  </div>
+
+  <!-- BUMP -->
+  <div class="section" id="sec-bump">
+    <div class="section-header" onclick="toggleSection('sec-bump')"><h2>Bump Detail</h2><svg class="section-chevron" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="4,2 8,6 4,10"/></svg></div>
+    <div class="section-body">
+      <div class="checkbox-row"><input type="checkbox" id="bumpOn" checked onchange="rebuildMesh()"><label for="bumpOn">Enable micro detail</label></div>
+      <div class="control-row"><label>Strength</label><div class="control-input"><input type="range" id="bumpStrength" min="0" max="0.3" step="0.005" value="0.050"><span class="range-value" id="bumpStrengthVal">0.050</span></div></div>
+      <div class="control-row"><label>Scale</label><div class="control-input"><input type="range" id="bumpScale" min="1" max="20" step="0.5" value="8.0"><span class="range-value" id="bumpScaleVal">8.0</span></div></div>
+    </div>
+  </div>
+
+  <!-- LIGHTING -->
+  <div class="section" id="sec-light">
+    <div class="section-header" onclick="toggleSection('sec-light')"><h2>Lighting</h2><svg class="section-chevron" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="4,2 8,6 4,10"/></svg></div>
+    <div class="section-body">
+      <div class="control-row"><label>Azimuth</label><div class="control-input"><input type="range" id="lightAzimuth" min="0" max="360" step="1" value="45"><span class="range-value" id="lightAzimuthVal">45</span></div></div>
+      <div class="control-row"><label>Elevation</label><div class="control-input"><input type="range" id="lightElevation" min="5" max="90" step="1" value="50"><span class="range-value" id="lightElevationVal">50</span></div></div>
+      <div class="control-row"><label>Intensity</label><div class="control-input"><input type="range" id="lightIntensity" min="0" max="3" step="0.05" value="1.20"><span class="range-value" id="lightIntensityVal">1.20</span></div></div>
+      <div class="control-row"><label>Light colour</label><div class="color-input-wrap"><input type="color" id="lightColor" value="#ffffff" oninput="syncColorText(this,'lightColorHex');updateLight()"><input type="text" id="lightColorHex" value="#ffffff" onchange="syncColorPicker(this,'lightColor');updateLight()"></div></div>
+      <div class="control-row"><label>Ambient</label><div class="control-input"><input type="range" id="ambientIntensity" min="0" max="1" step="0.01" value="0.25"><span class="range-value" id="ambientIntensityVal">0.25</span></div></div>
+    </div>
+  </div>
+
+  <!-- BACKGROUND -->
+  <div class="section" id="sec-bg">
+    <div class="section-header" onclick="toggleSection('sec-bg')"><h2>Background</h2><svg class="section-chevron" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="4,2 8,6 4,10"/></svg></div>
+    <div class="section-body">
+      <div class="control-row"><label>Colour</label><div class="color-input-wrap"><input type="color" id="bgColor" value="#09090b" oninput="syncColorText(this,'bgColorHex');updateBg()"><input type="text" id="bgColorHex" value="#09090b" onchange="syncColorPicker(this,'bgColor');updateBg()"></div></div>
+    </div>
+  </div>
+
+  <!-- EXPORT -->
+  <div class="section" id="sec-export">
+    <div class="section-header" onclick="toggleSection('sec-export')"><h2>Export</h2><svg class="section-chevron" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="4,2 8,6 4,10"/></svg></div>
+    <div class="section-body">
+      <button class="btn" onclick="exportScreenshot()">Save screenshot (PNG)</button>
+      <button class="btn" onclick="copySettings()">Copy settings to clipboard</button>
+      <button class="btn" onclick="pasteSettings()">Paste settings from clipboard</button>
+    </div>
+  </div>
+
+  <div style="height:32px"></div>
+</div>
+
+<script>
+// ===== SIMPLEX NOISE =====
+class SimplexNoise{
+  constructor(seed){
+    this.grad3=[[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
+    this.perm=new Array(512);this.p=new Array(256);
+    let rng=this.sr(seed);
+    for(let i=0;i<256;i++)this.p[i]=i;
+    for(let i=255;i>0;i--){let j=Math.floor(rng()*(i+1));[this.p[i],this.p[j]]=[this.p[j],this.p[i]];}
+    for(let i=0;i<512;i++)this.perm[i]=this.p[i&255];
+  }
+  sr(s){return function(){s=(s*16807)%2147483647;return(s-1)/2147483646;};}
+  dot(g,x,y){return g[0]*x+g[1]*y;}
+  noise2D(xin,yin){
+    const F2=0.5*(Math.sqrt(3)-1),G2=(3-Math.sqrt(3))/6;
+    let s=(xin+yin)*F2,i=Math.floor(xin+s),j=Math.floor(yin+s);
+    let t=(i+j)*G2,x0=xin-(i-t),y0=yin-(j-t);
+    let i1,j1;if(x0>y0){i1=1;j1=0;}else{i1=0;j1=1;}
+    let x1=x0-i1+G2,y1=y0-j1+G2,x2=x0-1+2*G2,y2=y0-1+2*G2;
+    let ii=i&255,jj=j&255;
+    let gi0=this.perm[ii+this.perm[jj]]%12,gi1=this.perm[ii+i1+this.perm[jj+j1]]%12,gi2=this.perm[ii+1+this.perm[jj+1]]%12;
+    let n0=0,n1=0,n2=0;
+    let t0=0.5-x0*x0-y0*y0;if(t0>=0){t0*=t0;n0=t0*t0*this.dot(this.grad3[gi0],x0,y0);}
+    let t1=0.5-x1*x1-y1*y1;if(t1>=0){t1*=t1;n1=t1*t1*this.dot(this.grad3[gi1],x1,y1);}
+    let t2=0.5-x2*x2-y2*y2;if(t2>=0){t2*=t2;n2=t2*t2*this.dot(this.grad3[gi2],x2,y2);}
+    return 70*(n0+n1+n2);
+  }
+}
+
+// ===== GLOBALS =====
+let scene,camera,renderer,meshObj,wireframeObj,dirLight,ambLight,clock;
+let isDragging=false,isPanning=false;
+let rotX=-0.7,rotY=0.4,camDist=3.5,panX=0,panY=0;
+let lastMouse={x:0,y:0},lastTouchDist=0;
+let animTime=0;
+let shaderMat=null;
+const viewport=document.getElementById('viewport');
+
+// ===== SHADERS =====
+const VS=`
+varying vec3 vWorldPos;
+varying vec3 vNormal;
+varying vec2 vUv;
+varying float vHeight;
+varying float vDisplacement;
+varying vec3 vViewPos;
+
+void main(){
+  vUv=uv;
+  vec4 wp=modelMatrix*vec4(position,1.0);
+  vWorldPos=wp.xyz;
+  vNormal=normalize(normalMatrix*normal);
+  vHeight=position.y;
+  vDisplacement=position.y;
+  vec4 mv=modelViewMatrix*vec4(position,1.0);
+  vViewPos=mv.xyz;
+  gl_Position=projectionMatrix*mv;
+}`;
+
+const FS=`
+uniform vec3 uSurfCol1;
+uniform vec3 uSurfCol2;
+uniform int uSurfMode;
+uniform vec3 uContCol;
+uniform vec3 uContGradEnd;
+uniform int uContColMode;
+uniform float uContSpace;
+uniform float uContThick;
+uniform float uContAlpha;
+uniform int uContStyle;
+uniform bool uContOn;
+uniform float uTime;
+uniform int uAnimMode;
+uniform float uAnimSpeed;
+uniform float uMinH;
+uniform float uMaxH;
+uniform float uMetal;
+uniform float uRough;
+uniform vec3 uLightDir;
+uniform vec3 uLightCol;
+uniform float uLightInt;
+uniform float uAmbInt;
+uniform bool uIsBlob;
+
+varying vec3 vWorldPos;
+varying vec3 vNormal;
+varying vec2 vUv;
+varying float vHeight;
+varying float vDisplacement;
+varying vec3 vViewPos;
+
+void main(){
+  float hRange=uMaxH-uMinH;
+  float normH=hRange>0.001?clamp((vHeight-uMinH)/hRange,0.0,1.0):0.0;
+  vec3 N=normalize(vNormal);
+  vec3 V=normalize(-vViewPos);
+
+  // Reference height for blob: use radial displacement mapped to 0-1
+  float contourRef=vHeight;
+  if(uIsBlob){
+    float radial=length(vWorldPos);
+    contourRef=radial;
+  }
+
+  // Surface colour
+  vec3 sc;
+  if(uSurfMode==0){sc=uSurfCol1;}
+  else if(uSurfMode==1){sc=mix(uSurfCol1,uSurfCol2,normH);}
+  else if(uSurfMode==2){
+    float slope=1.0-abs(dot(N,vec3(0.0,1.0,0.0)));
+    sc=mix(uSurfCol1,uSurfCol2,slope);
+  }else{
+    vec3 c0=vec3(0.05,0.0,0.3),c1=vec3(0.0,0.2,0.7),c2=vec3(0.0,0.75,0.3),c3=vec3(1.0,0.85,0.0),c4=vec3(0.9,0.1,0.05);
+    float t4=normH*4.0;
+    if(t4<1.0)sc=mix(c0,c1,t4);
+    else if(t4<2.0)sc=mix(c1,c2,t4-1.0);
+    else if(t4<3.0)sc=mix(c2,c3,t4-2.0);
+    else sc=mix(c3,c4,t4-3.0);
+  }
+
+  // Lighting
+  vec3 L=normalize(uLightDir);
+  vec3 H=normalize(L+V);
+  float NdL=max(dot(N,L),0.0);
+  float NdH=max(dot(N,H),0.0);
+  float rSq=uRough*uRough;
+  float specPow=mix(256.0,4.0,rSq);
+  float spec=pow(NdH,specPow);
+
+  vec3 diff=sc*NdL*uLightCol*uLightInt;
+  vec3 amb=sc*uAmbInt;
+  vec3 specC=uLightCol*spec*mix(0.04,1.0,uMetal)*uLightInt*(1.0-rSq*0.7);
+  float fresnel=pow(1.0-max(dot(N,V),0.0),4.0)*uMetal*0.4;
+
+  vec3 lit=amb+diff+specC+vec3(fresnel);
+
+  // Contour lines
+  if(uContOn&&uContSpace>0.001&&hRange>0.001){
+    float h=contourRef;
+
+    float offset=0.0;
+    if(uAnimMode==1)offset=uTime*uAnimSpeed;
+    else if(uAnimMode==2)offset=-uTime*uAnimSpeed;
+    else if(uAnimMode==3)offset=sin(uTime*uAnimSpeed*3.0)*uContSpace*3.0;
+    else if(uAnimMode==4){
+      float dist=uIsBlob?length(vWorldPos.xz):length(vWorldPos.xz);
+      offset=sin(uTime*uAnimSpeed*2.0-dist*4.0)*uContSpace*1.5;
+    }
+
+    float ch=h+offset;
+    float modV=mod(ch,uContSpace);
+    float distToLine=min(modV,uContSpace-modV);
+    float lineW=uContThick*uContSpace*0.15;
+
+    float fw=fwidth(ch)*1.2;
+    float cMask=1.0-smoothstep(lineW,lineW+fw,distToLine);
+
+    // Dashed/dotted
+    if(uContStyle==1){
+      float worldCoord=uIsBlob?(vWorldPos.x+vWorldPos.y):(vWorldPos.x+vWorldPos.z);
+      float dash=smoothstep(0.42,0.5,fract(worldCoord*6.0));
+      cMask*=dash;
+    }else if(uContStyle==2){
+      float wx=fract(vWorldPos.x*10.0);
+      float wz=fract((uIsBlob?vWorldPos.y:vWorldPos.z)*10.0);
+      float dotM=smoothstep(0.25,0.35,length(vec2(wx,wz)-0.5));
+      cMask*=(1.0-dotM);
+    }
+
+    // Contour colour
+    vec3 cC;
+    if(uContColMode==0){cC=uContCol;}
+    else if(uContColMode==1){cC=mix(uContCol,uContGradEnd,normH);}
+    else{
+      float slope=1.0-abs(dot(N,vec3(0.0,1.0,0.0)));
+      cC=mix(uContCol,uContGradEnd,slope);
+    }
+
+    lit=mix(lit,cC,cMask*uContAlpha);
+  }
+
+  gl_FragColor=vec4(lit,1.0);
+}`;
+
+// ===== INIT =====
+function init(){
+  scene=new THREE.Scene();
+  scene.background=new THREE.Color('#09090b');
+  camera=new THREE.PerspectiveCamera(45,viewport.clientWidth/viewport.clientHeight,0.1,100);
+  updateCamera();
+
+  renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+  renderer.setSize(viewport.clientWidth,viewport.clientHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  viewport.insertBefore(renderer.domElement,viewport.firstChild);
+
+  dirLight=new THREE.DirectionalLight(0xffffff,1.2);scene.add(dirLight);
+  ambLight=new THREE.AmbientLight(0xffffff,0.25);scene.add(ambLight);
+  updateLight();
+  clock=new THREE.Clock();
+
+  rebuildMesh();
+  animate();
+
+  renderer.domElement.addEventListener('mousedown',onMD);
+  window.addEventListener('mousemove',onMM);
+  window.addEventListener('mouseup',onMU);
+  renderer.domElement.addEventListener('wheel',onWh,{passive:false});
+  renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());
+  renderer.domElement.addEventListener('touchstart',onTS,{passive:false});
+  renderer.domElement.addEventListener('touchmove',onTM,{passive:false});
+  renderer.domElement.addEventListener('touchend',onTE);
+  window.addEventListener('resize',onResize);
+
+  // Bind all range sliders
+  document.querySelectorAll('input[type="range"]').forEach(el=>{
+    el.addEventListener('input',()=>{
+      updateVal(el.id);
+      const rebuilds=['cornerRadius','resolution','noiseFreq','noiseOctaves','noiseAmp','lacunarity','seed','bumpStrength','bumpScale','terrainHeight'];
+      const lights=['lightAzimuth','lightElevation','lightIntensity','ambientIntensity'];
+      if(rebuilds.includes(el.id))rebuildMesh();
+      else if(lights.includes(el.id))updateLight();
+      else if(el.id==='wireOpacity')updateWireframe();
+      else if(el.id==='meshScale'){updateUniforms();updateWireframe();}
+      else updateUniforms();
+    });
+  });
+}
+
+function updateVal(id){
+  const el=document.getElementById(id),vl=document.getElementById(id+'Val');
+  if(!vl)return;
+  const s=el.step||'1',d=s.includes('.')?s.split('.')[1].length:0;
+  vl.textContent=parseFloat(el.value).toFixed(d);
+}
+
+// ===== CAMERA =====
+function updateCamera(){
+  const x=camDist*Math.sin(rotY)*Math.cos(rotX);
+  const y=camDist*Math.sin(rotX);
+  const z=camDist*Math.cos(rotY)*Math.cos(rotX);
+  camera.position.set(x+panX,Math.abs(y)+panY,z);
+  camera.lookAt(panX,panY,0);
+}
+
+function resetCamera(){
+  rotX=-0.7;rotY=0.4;camDist=3.5;panX=0;panY=0;
+  updateCamera();
+}
+
+// ===== MOUSE =====
+function onMD(e){
+  if(e.button===0){isDragging=true;isPanning=false;}
+  if(e.button===2){isPanning=true;isDragging=false;}
+  lastMouse={x:e.clientX,y:e.clientY};
+}
+function onMM(e){
+  if(!isDragging&&!isPanning)return;
+  const dx=e.clientX-lastMouse.x,dy=e.clientY-lastMouse.y;
+  if(isDragging){rotY+=dx*0.005;rotX+=dy*0.005;rotX=Math.max(-Math.PI/2+0.05,Math.min(0.05,rotX));}
+  if(isPanning){panX-=dx*0.003*camDist;panY+=dy*0.003*camDist;}
+  lastMouse={x:e.clientX,y:e.clientY};updateCamera();
+}
+function onMU(){isDragging=false;isPanning=false;}
+function onWh(e){e.preventDefault();camDist*=1+e.deltaY*0.001;camDist=Math.max(0.8,Math.min(15,camDist));updateCamera();}
+
+// ===== TOUCH =====
+function onTS(e){
+  e.preventDefault();
+  if(e.touches.length===1){isDragging=true;lastMouse={x:e.touches[0].clientX,y:e.touches[0].clientY};}
+  else if(e.touches.length===2){isDragging=false;lastTouchDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);lastMouse={x:(e.touches[0].clientX+e.touches[1].clientX)/2,y:(e.touches[0].clientY+e.touches[1].clientY)/2};}
+}
+function onTM(e){
+  e.preventDefault();
+  if(e.touches.length===1&&isDragging){
+    const dx=e.touches[0].clientX-lastMouse.x,dy=e.touches[0].clientY-lastMouse.y;
+    rotY+=dx*0.005;rotX+=dy*0.005;rotX=Math.max(-Math.PI/2+0.05,Math.min(0.05,rotX));
+    lastMouse={x:e.touches[0].clientX,y:e.touches[0].clientY};updateCamera();
+  }else if(e.touches.length===2){
+    const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+    if(lastTouchDist>0){camDist*=lastTouchDist/d;camDist=Math.max(0.8,Math.min(15,camDist));}
+    const mx=(e.touches[0].clientX+e.touches[1].clientX)/2,my=(e.touches[0].clientY+e.touches[1].clientY)/2;
+    panX-=(mx-lastMouse.x)*0.003*camDist;panY+=(my-lastMouse.y)*0.003*camDist;
+    lastMouse={x:mx,y:my};lastTouchDist=d;updateCamera();
+  }
+}
+function onTE(){isDragging=false;lastTouchDist=0;}
+function onResize(){camera.aspect=viewport.clientWidth/viewport.clientHeight;camera.updateProjectionMatrix();renderer.setSize(viewport.clientWidth,viewport.clientHeight);}
+
+// ===== NOISE =====
+function getNoise(noise,x,y,type,freq,octaves,lac){
+  let val=0,f=freq,a=1.0,mx=0;
+  for(let o=0;o<octaves;o++){
+    let n=noise.noise2D(x*f,y*f);
+    if(type==='ridged')n=1.0-Math.abs(n);
+    if(type==='billow')n=Math.abs(n)*2.0-1.0;
+    val+=n*a;mx+=a;f*=lac;a*=0.5;
+  }
+  val/=mx;
+  if(type==='terraced')val=Math.round(val*6.0)/6.0;
+  return val;
+}
+
+function smoothstep(a,b,x){let t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t);}
+
+// ===== BUILD MESH =====
+function rebuildMesh(){
+  if(meshObj){scene.remove(meshObj);meshObj.geometry.dispose();}
+  if(wireframeObj){scene.remove(wireframeObj);wireframeObj.geometry.dispose();wireframeObj.material.dispose();wireframeObj=null;}
+
+  const mode=getToggle('shapeModeGroup');
+  const res=parseInt(v('resolution'));
+  const scale=parseFloat(v('meshScale'));
+  const freq=parseFloat(v('noiseFreq'));
+  const octaves=parseInt(v('noiseOctaves'));
+  const amp=parseFloat(v('noiseAmp'));
+  const lac=parseFloat(v('lacunarity'));
+  const seed=parseInt(v('seed'));
+  const nType=v('noiseType');
+  const bumpOn=document.getElementById('bumpOn').checked;
+  const bumpStr=parseFloat(v('bumpStrength'));
+  const bumpScl=parseFloat(v('bumpScale'));
+  const terrainH=parseFloat(v('terrainHeight'));
+
+  const noise=new SimplexNoise(seed);
+  const bumpNoise=new SimplexNoise(seed+999);
+
+  let geo,minH=Infinity,maxH=-Infinity;
+
+  if(mode==='terrain'){
+    geo=new THREE.PlaneGeometry(2,2,res,res);
+    geo.rotateX(-Math.PI/2);
+    const fp=getToggle('footprintGroup');
+    const cr=parseFloat(v('cornerRadius'));
+    const pos=geo.attributes.position;
+
+    for(let i=0;i<pos.count;i++){
+      let x=pos.getX(i),z=pos.getZ(i);
+
+      // Mask
+      let mask=1.0;
+      if(fp==='circle'){
+        let d=Math.sqrt(x*x+z*z);
+        mask=1.0-smoothstep(0.88,1.0,d);
+      }else{
+        let ax=Math.abs(x),az=Math.abs(z);
+        if(cr>0){
+          let r=cr*0.95,edge=1.0-r;
+          if(ax>edge&&az>edge){
+            let dd=Math.sqrt((ax-edge)*(ax-edge)+(az-edge)*(az-edge));
+            mask=Math.min(mask,1.0-smoothstep(r*0.85,r*1.05,dd));
+          }
+          // Soft edge on straight sides when rounded
+          let maxEdge=Math.max(ax,az);
+          let edgeFade=1.0-smoothstep(0.93,1.0,maxEdge);
+          mask=Math.min(mask,edgeFade);
+        }else{
+          let maxEdge=Math.max(ax,az);
+          mask=1.0-smoothstep(0.94,1.0,maxEdge);
+        }
+      }
+
+      let h=getNoise(noise,x,z,nType,freq,octaves,lac)*amp;
+      if(bumpOn)h+=bumpNoise.noise2D(x*bumpScl,z*bumpScl)*bumpStr;
+
+      // Apply terrain height multiplier (0 = flat, 1 = full)
+      h*=terrainH;
+      h*=mask;
+
+      pos.setY(i,h);
+      if(h<minH)minH=h;
+      if(h>maxH)maxH=h;
+    }
+    pos.needsUpdate=true;
+    geo.computeVertexNormals();
+  }else{
+    // Blob
+    geo=new THREE.SphereGeometry(1,res,Math.floor(res*0.6));
+    const pos=geo.attributes.position;
+
+    for(let i=0;i<pos.count;i++){
+      let x=pos.getX(i),y=pos.getY(i),z=pos.getZ(i);
+      let len=Math.sqrt(x*x+y*y+z*z);
+      if(len===0)continue;
+      let nx=x/len,ny=y/len,nz=z/len;
+      let u=Math.atan2(nz,nx),vv=Math.asin(Math.max(-1,Math.min(1,ny)));
+
+      let disp=getNoise(noise,u,vv,nType,freq*0.7,octaves,lac)*amp*0.5;
+      if(bumpOn)disp+=bumpNoise.noise2D(u*bumpScl*0.5,vv*bumpScl*0.5)*bumpStr;
+
+      disp*=terrainH;
+      let r=1.0+disp;
+      pos.setX(i,nx*r);pos.setY(i,ny*r);pos.setZ(i,nz*r);
+
+      if(ny*r<minH)minH=ny*r;
+      if(ny*r>maxH)maxH=ny*r;
+    }
+    pos.needsUpdate=true;
+    geo.computeVertexNormals();
+  }
+
+  if(minH===Infinity)minH=0;
+  if(maxH===-Infinity)maxH=0;
+  // Ensure some range even when flat
+  if(maxH-minH<0.001){maxH=minH+0.001;}
+
+  if(!shaderMat){
+    shaderMat=new THREE.ShaderMaterial({
+      vertexShader:VS,fragmentShader:FS,
+      uniforms:{
+        uSurfCol1:{value:new THREE.Color('#1a1a2e')},
+        uSurfCol2:{value:new THREE.Color('#4a6670')},
+        uSurfMode:{value:1},
+        uContCol:{value:new THREE.Color('#ffffff')},
+        uContGradEnd:{value:new THREE.Color('#ff6b6b')},
+        uContColMode:{value:0},
+        uContSpace:{value:0.06},
+        uContThick:{value:0.4},
+        uContAlpha:{value:1.0},
+        uContStyle:{value:0},
+        uContOn:{value:true},
+        uTime:{value:0},
+        uAnimMode:{value:1},
+        uAnimSpeed:{value:0.3},
+        uMinH:{value:minH},
+        uMaxH:{value:maxH},
+        uMetal:{value:0.1},
+        uRough:{value:0.7},
+        uLightDir:{value:new THREE.Vector3(1,1,1)},
+        uLightCol:{value:new THREE.Color('#ffffff')},
+        uLightInt:{value:1.2},
+        uAmbInt:{value:0.25},
+        uIsBlob:{value:false}
+      },
+      side:THREE.DoubleSide,
+      extensions:{derivatives:true}
+    });
+  }
+
+  shaderMat.uniforms.uMinH.value=minH;
+  shaderMat.uniforms.uMaxH.value=maxH;
+  shaderMat.uniforms.uIsBlob.value=(mode==='blob');
+  updateUniforms();
+  updateLight();
+
+  meshObj=new THREE.Mesh(geo,shaderMat);
+  meshObj.scale.set(scale,scale,scale);
+  scene.add(meshObj);
+  updateWireframe();
+}
+
+// ===== WIREFRAME =====
+function updateWireframe(){
+  if(wireframeObj){scene.remove(wireframeObj);wireframeObj.geometry.dispose();wireframeObj.material.dispose();wireframeObj=null;}
+  if(document.getElementById('wireframe').checked&&meshObj){
+    const wg=new THREE.WireframeGeometry(meshObj.geometry);
+    const op=parseFloat(v('wireOpacity'));
+    const wm=new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:op,depthTest:true});
+    wireframeObj=new THREE.LineSegments(wg,wm);
+    wireframeObj.scale.copy(meshObj.scale);
+    scene.add(wireframeObj);
+  }
+}
+
+// ===== UNIFORMS =====
+function updateUniforms(){
+  if(!shaderMat)return;
+  const u=shaderMat.uniforms;
+  u.uSurfCol1.value.set(v('surfaceColor1'));
+  u.uSurfCol2.value.set(v('surfaceColor2'));
+  u.uSurfMode.value={'solid':0,'altitude':1,'slope':2,'heatmap':3}[v('surfaceColorMode')]||0;
+  u.uContCol.value.set(v('contourColor'));
+  u.uContGradEnd.value.set(v('contourGradEnd'));
+  u.uContColMode.value={'solid':0,'altitude':1,'slope':2}[v('contourColorMode')]||0;
+  u.uContSpace.value=parseFloat(v('contourSpacing'));
+  u.uContThick.value=parseFloat(v('contourThick'));
+  u.uContAlpha.value=parseFloat(v('contourOpacity'));
+  u.uContStyle.value={'solid':0,'dashed':1,'dotted':2}[v('contourStyle')]||0;
+  u.uContOn.value=document.getElementById('contoursOn').checked;
+  u.uAnimMode.value={'none':0,'rise':1,'fall':2,'pulse':3,'ripple':4}[v('animMode')]||0;
+  u.uAnimSpeed.value=parseFloat(v('animSpeed'));
+  u.uMetal.value=parseFloat(v('metalness'));
+  u.uRough.value=parseFloat(v('roughness'));
+
+  if(meshObj){
+    const s=parseFloat(v('meshScale'));
+    meshObj.scale.set(s,s,s);
+    if(wireframeObj)wireframeObj.scale.set(s,s,s);
+  }
+}
+
+function updateLight(){
+  const az=parseFloat(v('lightAzimuth'))*Math.PI/180;
+  const el=parseFloat(v('lightElevation'))*Math.PI/180;
+  const r=5;
+  const lx=r*Math.cos(el)*Math.sin(az),ly=r*Math.sin(el),lz=r*Math.cos(el)*Math.cos(az);
+  dirLight.position.set(lx,ly,lz);
+  dirLight.intensity=parseFloat(v('lightIntensity'));
+  dirLight.color.set(v('lightColor'));
+  ambLight.intensity=parseFloat(v('ambientIntensity'));
+  if(shaderMat){
+    shaderMat.uniforms.uLightDir.value.set(lx,ly,lz).normalize();
+    shaderMat.uniforms.uLightCol.value.set(v('lightColor'));
+    shaderMat.uniforms.uLightInt.value=parseFloat(v('lightIntensity'));
+    shaderMat.uniforms.uAmbInt.value=parseFloat(v('ambientIntensity'));
+  }
+}
+
+function updateBg(){scene.background=new THREE.Color(v('bgColor'));}
+
+// ===== ANIMATE =====
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=clock.getDelta();
+  const paused=document.getElementById('animPause').checked;
+
+  if(!paused){
+    animTime+=dt;
+    if(document.getElementById('autoRotate').checked){
+      rotY+=dt*parseFloat(v('autoRotateSpeed'));
+      updateCamera();
+    }
+  }
+
+  if(shaderMat)shaderMat.uniforms.uTime.value=animTime;
+  renderer.render(scene,camera);
+}
+
+// ===== HELPERS =====
+function v(id){return document.getElementById(id).value;}
+function getToggle(groupId){const b=document.querySelector('#'+groupId+' button.active');return b?b.dataset.val:'';}
+function setToggle(groupId,btn){document.querySelectorAll('#'+groupId+' button').forEach(b=>b.classList.remove('active'));btn.classList.add('active');}
+
+function toggleSection(id){document.getElementById(id).classList.toggle('collapsed');}
+function togglePanel(){
+  const p=document.getElementById('panel');
+  p.classList.toggle('hidden');
+  setTimeout(onResize,260);
+}
+
+function syncColorText(picker,textId){document.getElementById(textId).value=picker.value;}
+function syncColorPicker(text,pickerId){if(/^#[0-9a-fA-F]{6}$/.test(text.value))document.getElementById(pickerId).value=text.value;}
+
+function exportScreenshot(){
+  renderer.render(scene,camera);
+  const a=document.createElement('a');a.download='contour-design.png';
+  a.href=renderer.domElement.toDataURL('image/png');a.click();
+}
+
+function gatherSettings(){
+  const s={};
+  document.querySelectorAll('input[type="range"],input[type="color"],select').forEach(el=>{s[el.id]=el.value;});
+  document.querySelectorAll('input[type="checkbox"]').forEach(el=>{s[el.id]=el.checked;});
+  s._shapeMode=getToggle('shapeModeGroup');
+  s._footprint=getToggle('footprintGroup');
+  return s;
+}
+
+function copySettings(){
+  navigator.clipboard.writeText(JSON.stringify(gatherSettings(),null,2)).then(()=>{
+    showInfo('Settings copied');
+  });
+}
+
+function pasteSettings(){
+  navigator.clipboard.readText().then(text=>{
+    try{
+      const s=JSON.parse(text);
+      loadSettings(s);
+      showInfo('Settings applied');
+    }catch(e){showInfo('Could not parse settings');}
+  }).catch(()=>{showInfo('Clipboard access denied');});
+}
+
+function loadSettings(s){
+  if(s._shapeMode){
+    document.querySelectorAll('#shapeModeGroup button').forEach(b=>b.classList.toggle('active',b.dataset.val===s._shapeMode));
+    document.getElementById('terrainShapeControls').style.display=s._shapeMode==='terrain'?'block':'none';
+  }
+  if(s._footprint){
+    document.querySelectorAll('#footprintGroup button').forEach(b=>b.classList.toggle('active',b.dataset.val===s._footprint));
+    document.getElementById('cornerRadiusRow').style.display=s._footprint==='square'?'flex':'none';
+  }
+  const fields=['noiseType','noiseFreq','noiseOctaves','noiseAmp','lacunarity','seed','terrainHeight',
+    'surfaceColorMode','surfaceColor1','surfaceColor2','contourColor','contourGradEnd','contourColorMode',
+    'contourSpacing','contourThick','contourOpacity','contourStyle','animMode','animSpeed',
+    'bgColor','metalness','roughness','cornerRadius','meshScale','resolution',
+    'bumpStrength','bumpScale','lightAzimuth','lightElevation','lightIntensity','lightColor',
+    'ambientIntensity','wireOpacity','autoRotateSpeed'];
+  const checks=['contoursOn','bumpOn','wireframe','autoRotate','animPause'];
+
+  fields.forEach(k=>{
+    if(s[k]!==undefined){
+      const el=document.getElementById(k);
+      if(el){el.value=s[k];updateVal(k);const hex=document.getElementById(k+'Hex');if(hex)hex.value=s[k];}
+    }
+  });
+  checks.forEach(k=>{
+    if(s[k]!==undefined){const el=document.getElementById(k);if(el)el.checked=s[k];}
+  });
+
+  updateBg();rebuildMesh();
+}
+
+function showInfo(msg){
+  const ib=document.getElementById('infoBar');
+  ib.textContent=msg;
+  setTimeout(()=>{ib.textContent='Drag to rotate / Scroll to zoom / Right-drag to pan';},2500);
+}
+
+// ===== PRESETS =====
+const PRESETS={
+  flat:{
+    _shapeMode:'terrain',_footprint:'square',cornerRadius:'0',resolution:'128',meshScale:'1.50',
+    terrainHeight:'0',noiseType:'simplex',noiseFreq:'1.50',noiseOctaves:'4',noiseAmp:'0.50',lacunarity:'2.00',seed:'42',
+    surfaceColorMode:'solid',surfaceColor1:'#1a1a2e',surfaceColor2:'#4a6670',
+    contourColor:'#ffffff',contourGradEnd:'#ff6b6b',contourColorMode:'solid',
+    contourSpacing:'0.060',contourThick:'0.40',contourOpacity:'1.00',contourStyle:'solid',
+    animMode:'rise',animSpeed:'0.30',
+    metalness:'0.10',roughness:'0.70',bgColor:'#09090b',
+    lightAzimuth:'45',lightElevation:'50',lightIntensity:'1.20',lightColor:'#ffffff',ambientIntensity:'0.25',
+    contoursOn:true,bumpOn:false,wireframe:false,autoRotate:false,animPause:false,
+    bumpStrength:'0.050',bumpScale:'8.0',wireOpacity:'0.12',autoRotateSpeed:'0.20'
+  },
+  gentle:{
+    _shapeMode:'terrain',_footprint:'circle',cornerRadius:'0',resolution:'128',meshScale:'1.50',
+    terrainHeight:'0.40',noiseType:'simplex',noiseFreq:'1.20',noiseOctaves:'3',noiseAmp:'0.40',lacunarity:'2.00',seed:'88',
+    surfaceColorMode:'altitude',surfaceColor1:'#162020',surfaceColor2:'#3a6060',
+    contourColor:'#88bbaa',contourGradEnd:'#ddeecc',contourColorMode:'altitude',
+    contourSpacing:'0.040',contourThick:'0.35',contourOpacity:'0.70',contourStyle:'solid',
+    animMode:'rise',animSpeed:'0.15',
+    metalness:'0.05',roughness:'0.80',bgColor:'#09090b',
+    lightAzimuth:'60',lightElevation:'55',lightIntensity:'1.10',lightColor:'#ffffff',ambientIntensity:'0.30',
+    contoursOn:true,bumpOn:true,wireframe:false,autoRotate:false,animPause:false,
+    bumpStrength:'0.030',bumpScale:'6.0',wireOpacity:'0.12',autoRotateSpeed:'0.20'
+  },
+  alpine:{
+    _shapeMode:'terrain',_footprint:'square',cornerRadius:'0.30',resolution:'160',meshScale:'1.50',
+    terrainHeight:'1.000',noiseType:'simplex',noiseFreq:'2.00',noiseOctaves:'5',noiseAmp:'0.70',lacunarity:'2.20',seed:'137',
+    surfaceColorMode:'altitude',surfaceColor1:'#1a2632',surfaceColor2:'#c8d6e0',
+    contourColor:'#ffffff',contourGradEnd:'#88aacc',contourColorMode:'solid',
+    contourSpacing:'0.050',contourThick:'0.35',contourOpacity:'0.70',contourStyle:'solid',
+    animMode:'rise',animSpeed:'0.15',
+    metalness:'0.05',roughness:'0.75',bgColor:'#0a0e14',
+    lightAzimuth:'45',lightElevation:'50',lightIntensity:'1.20',lightColor:'#ffffff',ambientIntensity:'0.25',
+    contoursOn:true,bumpOn:true,wireframe:false,autoRotate:false,animPause:false,
+    bumpStrength:'0.050',bumpScale:'8.0',wireOpacity:'0.12',autoRotateSpeed:'0.20'
+  },
+  dunes:{
+    _shapeMode:'terrain',_footprint:'circle',cornerRadius:'0',resolution:'128',meshScale:'1.50',
+    terrainHeight:'1.000',noiseType:'billow',noiseFreq:'1.20',noiseOctaves:'3',noiseAmp:'0.35',lacunarity:'2.50',seed:'88',
+    surfaceColorMode:'altitude',surfaceColor1:'#3d2b1f',surfaceColor2:'#d4a960',
+    contourColor:'#f5deb3',contourGradEnd:'#8b6914',contourColorMode:'altitude',
+    contourSpacing:'0.040',contourThick:'0.30',contourOpacity:'0.50',contourStyle:'solid',
+    animMode:'none',animSpeed:'0.00',
+    metalness:'0.00',roughness:'0.90',bgColor:'#1a1008',
+    lightAzimuth:'30',lightElevation:'40',lightIntensity:'1.40',lightColor:'#ffe8c0',ambientIntensity:'0.20',
+    contoursOn:true,bumpOn:true,wireframe:false,autoRotate:false,animPause:false,
+    bumpStrength:'0.040',bumpScale:'10.0',wireOpacity:'0.12',autoRotateSpeed:'0.20'
+  },
+  mesa:{
+    _shapeMode:'terrain',_footprint:'square',cornerRadius:'0.50',resolution:'128',meshScale:'1.50',
+    terrainHeight:'1.000',noiseType:'terraced',noiseFreq:'1.50',noiseOctaves:'4',noiseAmp:'0.55',lacunarity:'2.00',seed:'305',
+    surfaceColorMode:'altitude',surfaceColor1:'#4a2020',surfaceColor2:'#d4956a',
+    contourColor:'#ffccaa',contourGradEnd:'#cc6633',contourColorMode:'altitude',
+    contourSpacing:'0.080',contourThick:'0.50',contourOpacity:'0.90',contourStyle:'solid',
+    animMode:'none',animSpeed:'0.00',
+    metalness:'0.00',roughness:'0.85',bgColor:'#120808',
+    lightAzimuth:'50',lightElevation:'45',lightIntensity:'1.30',lightColor:'#ffddbb',ambientIntensity:'0.20',
+    contoursOn:true,bumpOn:true,wireframe:false,autoRotate:false,animPause:false,
+    bumpStrength:'0.050',bumpScale:'8.0',wireOpacity:'0.12',autoRotateSpeed:'0.20'
+  },
+  ocean:{
+    _shapeMode:'terrain',_footprint:'circle',cornerRadius:'0',resolution:'160',meshScale:'1.50',
+    terrainHeight:'1.000',noiseType:'simplex',noiseFreq:'1.80',noiseOctaves:'6',noiseAmp:'0.40',lacunarity:'2.10',seed:'512',
+    surfaceColorMode:'altitude',surfaceColor1:'#001428',surfaceColor2:'#00667a',
+    contourColor:'#00ccff',contourGradEnd:'#004466',contourColorMode:'altitude',
+    contourSpacing:'0.050',contourThick:'0.40',contourOpacity:'0.60',contourStyle:'solid',
+    animMode:'ripple',animSpeed:'0.40',
+    metalness:'0.20',roughness:'0.50',bgColor:'#000a14',
+    lightAzimuth:'90',lightElevation:'60',lightIntensity:'1.00',lightColor:'#88ccff',ambientIntensity:'0.30',
+    contoursOn:true,bumpOn:true,wireframe:false,autoRotate:false,animPause:false,
+    bumpStrength:'0.060',bumpScale:'12.0',wireOpacity:'0.12',autoRotateSpeed:'0.20'
+  },
+  lava:{
+    _shapeMode:'terrain',_footprint:'square',cornerRadius:'0.80',resolution:'128',meshScale:'1.50',
+    terrainHeight:'1.000',noiseType:'ridged',noiseFreq:'2.50',noiseOctaves:'5',noiseAmp:'0.60',lacunarity:'2.30',seed:'666',
+    surfaceColorMode:'heatmap',surfaceColor1:'#1a0000',surfaceColor2:'#ff4400',
+    contourColor:'#ff6600',contourGradEnd:'#ffcc00',contourColorMode:'altitude',
+    contourSpacing:'0.040',contourThick:'0.55',contourOpacity:'1.00',contourStyle:'solid',
+    animMode:'pulse',animSpeed:'0.50',
+    metalness:'0.30',roughness:'0.40',bgColor:'#0a0000',
+    lightAzimuth:'120',lightElevation:'35',lightIntensity:'1.50',lightColor:'#ff8844',ambientIntensity:'0.15',
+    contoursOn:true,bumpOn:true,wireframe:false,autoRotate:false,animPause:false,
+    bumpStrength:'0.070',bumpScale:'6.0',wireOpacity:'0.12',autoRotateSpeed:'0.20'
+  },
+  ice:{
+    _shapeMode:'terrain',_footprint:'circle',cornerRadius:'0',resolution:'128',meshScale:'1.50',
+    terrainHeight:'1.000',noiseType:'simplex',noiseFreq:'1.00',noiseOctaves:'3',noiseAmp:'0.25',lacunarity:'2.00',seed:'200',
+    surfaceColorMode:'altitude',surfaceColor1:'#c8e0f0',surfaceColor2:'#ffffff',
+    contourColor:'#6699bb',contourGradEnd:'#aaccdd',contourColorMode:'solid',
+    contourSpacing:'0.030',contourThick:'0.25',contourOpacity:'0.40',contourStyle:'solid',
+    animMode:'rise',animSpeed:'0.10',
+    metalness:'0.40',roughness:'0.20',bgColor:'#0d1117',
+    lightAzimuth:'80',lightElevation:'65',lightIntensity:'1.30',lightColor:'#ddeeff',ambientIntensity:'0.35',
+    contoursOn:true,bumpOn:true,wireframe:false,autoRotate:false,animPause:false,
+    bumpStrength:'0.020',bumpScale:'10.0',wireOpacity:'0.12',autoRotateSpeed:'0.20'
+  },
+  alien:{
+    _shapeMode:'blob',_footprint:'square',cornerRadius:'0',resolution:'128',meshScale:'1.50',
+    terrainHeight:'1.000',noiseType:'ridged',noiseFreq:'2.00',noiseOctaves:'5',noiseAmp:'0.80',lacunarity:'2.00',seed:'777',
+    surfaceColorMode:'slope',surfaceColor1:'#1a002e',surfaceColor2:'#00ff88',
+    contourColor:'#ff00ff',contourGradEnd:'#00ffff',contourColorMode:'altitude',
+    contourSpacing:'0.060',contourThick:'0.45',contourOpacity:'0.80',contourStyle:'solid',
+    animMode:'ripple',animSpeed:'0.60',
+    metalness:'0.60',roughness:'0.30',bgColor:'#050010',
+    lightAzimuth:'200',lightElevation:'40',lightIntensity:'1.40',lightColor:'#aa88ff',ambientIntensity:'0.20',
+    contoursOn:true,bumpOn:true,wireframe:false,autoRotate:true,animPause:false,
+    bumpStrength:'0.060',bumpScale:'8.0',wireOpacity:'0.12',autoRotateSpeed:'0.30'
+  },
+  topo:{
+    _shapeMode:'terrain',_footprint:'square',cornerRadius:'0',resolution:'128',meshScale:'1.50',
+    terrainHeight:'1.000',noiseType:'simplex',noiseFreq:'1.50',noiseOctaves:'4',noiseAmp:'0.50',lacunarity:'2.00',seed:'42',
+    surfaceColorMode:'solid',surfaceColor1:'#f5f0e8',surfaceColor2:'#f5f0e8',
+    contourColor:'#8b7355',contourGradEnd:'#4a3728',contourColorMode:'solid',
+    contourSpacing:'0.050',contourThick:'0.35',contourOpacity:'1.00',contourStyle:'solid',
+    animMode:'none',animSpeed:'0.00',
+    metalness:'0.00',roughness:'1.00',bgColor:'#f5f0e8',
+    lightAzimuth:'45',lightElevation:'70',lightIntensity:'1.00',lightColor:'#ffffff',ambientIntensity:'0.40',
+    contoursOn:true,bumpOn:false,wireframe:false,autoRotate:false,animPause:false,
+    bumpStrength:'0.050',bumpScale:'8.0',wireOpacity:'0.12',autoRotateSpeed:'0.20'
+  }
+};
+
+function applyPreset(name){
+  if(!PRESETS[name])return;
+  loadSettings(PRESETS[name]);
+}
+
+// ===== START =====
+init();
+</script>
+</body>
+</html>
